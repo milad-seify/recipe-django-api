@@ -21,7 +21,7 @@ class Command(BaseCommand):
         db_up = False
         while db_up is False:
             try:
-                self.check(databases=['default'])
+                self.check(databases=['default'])  # type: ignore
                 db_up = True
             except (Psycopg2UpError, OperationalError):
                 self.stdout.write(
