@@ -2,6 +2,7 @@
     "cSpell.words": [
         "authtoken",
         "psycopg",
-        "testpass"
+        "testpass",
+        "viewsets"
     ]
 }
