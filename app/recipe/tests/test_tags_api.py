@@ -1,6 +1,7 @@
 """
 Test for the tags API.
 """
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.test import TestCase
@@ -8,7 +9,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.models import Tag
+from core.models import Tag, Recipe
 
 from recipe.serializers import TagSerializer
 
@@ -19,6 +20,22 @@ TAGS_URL = reverse('recipe:tag-list')
 def detail_url(tag_id):
     """Create and return a tag detail url."""
     return reverse('recipe:tag-detail', args=[tag_id])
+
+
+def create_recipe(user, **params):  # helper function
+    """Create and return a sample recipe"""
+
+    defaults = {
+        'title': 'sample for recipe title',
+        'time_minutes': 32,
+        'price': Decimal('43.2'),
+        'description': 'good food test',
+        'link': 'http://recipetest.com/recipe.pdf',
+    }
+    defaults.update(params)
+
+    recipe = Recipe.objects.create(user=user, **defaults)
+    return recipe
 
 
 def create_user(email='user@examle.com', password='userexampletest123'):
@@ -96,3 +113,33 @@ class PrivateTagsApiTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         tags = Tag.objects.filter(user=self.user)
         self.assertFalse(tags.exists())
+
+    def test_filter_tags_assigned_to_recipes(self):
+        """Test listing tags by those assigned to recipe"""
+        recipe = create_recipe(user=self.user, title='Salad')
+        tag1 = Tag.objects.create(user=self.user, name='Lemon')
+        tag2 = Tag.objects.create(user=self.user, name='Oil')
+
+        recipe.tags.add(tag1)
+
+        response = self.client.get(TAGS_URL, {'assigned_only': 1})
+
+        s1 = TagSerializer(tag1)
+        s2 = TagSerializer(tag2)
+
+        self.assertIn(s1.data, response.data)  # type: ignore
+        self.assertNotIn(s2.data, response.data)  # type: ignore
+
+    def test_filtered_tags_unique(self):
+        """Test filtered tags returns a unique list."""
+        recipe = create_recipe(user=self.user, title='Salad')
+        recipe2 = create_recipe(user=self.user, title='Beef')
+        tag1 = Tag.objects.create(user=self.user, name='Oil')
+        Tag.objects.create(user=self.user, name='Lemon')
+
+        recipe.tags.add(tag1)
+        recipe2.tags.add(tag1)
+
+        response = self.client.get(TAGS_URL, {'assigned_only': 1})
+
+        self.assertEqual(len(response.data), 1)  # type: ignore

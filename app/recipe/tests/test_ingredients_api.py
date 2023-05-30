@@ -1,4 +1,5 @@
 """Test for the ingredients"""
+from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.test import TestCase
@@ -6,7 +7,7 @@ from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from core.models import Ingredient
+from core.models import Ingredient, Recipe
 
 from recipe.serializers import IngredientSerializer
 
@@ -22,6 +23,22 @@ def create_user(email='test@example.com', password='testpass123'):
     """Create and return user"""
     return get_user_model().objects.\
         create_user(email=email, password=password)  # type: ignore
+
+
+def create_recipe(user, **params):  # helper function
+    """Create and return a sample recipe"""
+
+    defaults = {
+        'title': 'sample for recipe title',
+        'time_minutes': 32,
+        'price': Decimal('43.2'),
+        'description': 'good food test',
+        'link': 'http://recipetest.com/recipe.pdf',
+    }
+    defaults.update(params)
+
+    recipe = Recipe.objects.create(user=user, **defaults)
+    return recipe
 
 
 class PublicIngredientApiTest(TestCase):
@@ -94,3 +111,33 @@ class PrivateIngredientApiTest(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         ingredient = Ingredient.objects.filter(user=self.user)
         self.assertFalse(ingredient.exists())
+
+    def test_filter_ingredients_assigned_to_recipes(self):
+        """Test listing ingredient by those assigned to recipe"""
+        recipe = create_recipe(user=self.user, title='Salad')
+        ingredient1 = Ingredient.objects.create(user=self.user, name='Lemon')
+        ingredient2 = Ingredient.objects.create(user=self.user, name='Oil')
+
+        recipe.ingredients.add(ingredient1)
+
+        response = self.client.get(INGREDIENTS_URL, {'assigned_only': 1})
+
+        s1 = IngredientSerializer(ingredient1)
+        s2 = IngredientSerializer(ingredient2)
+
+        self.assertIn(s1.data, response.data)  # type: ignore
+        self.assertNotIn(s2.data, response.data)  # type: ignore
+
+    def test_filtered_ingredients_unique(self):
+        """Test filtered ingredients returns a unique list."""
+        recipe = create_recipe(user=self.user, title='Salad')
+        recipe2 = create_recipe(user=self.user, title='Beef')
+        ing1 = Ingredient.objects.create(user=self.user, name='Oil')
+        Ingredient.objects.create(user=self.user, name='Lemon')
+
+        recipe.ingredients.add(ing1)
+        recipe2.ingredients.add(ing1)
+
+        response = self.client.get(INGREDIENTS_URL, {'assigned_only': 1})
+
+        self.assertEqual(len(response.data), 1)  # type: ignore

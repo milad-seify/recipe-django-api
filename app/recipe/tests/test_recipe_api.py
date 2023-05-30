@@ -409,6 +409,53 @@ class PrivateRecipeApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertEqual(recipe.ingredients.count(), 0)
 
+    def test_filter_by_tags(self):
+        """Test filtering recipes by tags """
+        recipe1 = create_recipe(user=self.user, title='Salad with eggs')
+        recipe2 = create_recipe(user=self.user, title='Salad')
+        tag1 = Tag.objects.create(user=self.user, name='Vegetarian')
+        tag2 = Tag.objects.create(user=self.user, name='Vegan')
+        recipe1.tags.add(tag1)
+        recipe2.tags.add(tag2)
+        recipe3 = create_recipe(user=self.user, title='Chicken')
+
+        params = {'tags': f'{tag1.id},{tag2.id}'}  # type: ignore
+
+        response = self.client.get(RECIPES_URL, params)
+
+        ser1 = RecipeSerializer(recipe1)
+        ser2 = RecipeSerializer(recipe2)
+        ser3 = RecipeSerializer(recipe3)
+
+        self.assertIn(ser1.data, response.data)  # type: ignore
+        self.assertIn(ser2.data, response.data)  # type: ignore
+        self.assertNotIn(ser3.data, response.data)  # type: ignore
+
+    def test_filter_by_ingredients(self):
+        """Test filtering recipe by ingredients"""
+        recipe1 = create_recipe(user=self.user, title='Salad')
+        recipe2 = create_recipe(user=self.user, title='Chicken')
+        ingredient1 = Ingredient.objects.create(
+            user=self.user, name='Lettuce and carrot')
+        ingredient2 = Ingredient.objects.create(
+            user=self.user, name='Chicken fillet and olive oil')
+        recipe1.ingredients.add(ingredient1)
+        recipe2.ingredients.add(ingredient2)
+
+        recipe3 = create_recipe(user=self.user, title='test')
+
+        params = {'ingredients':
+                  f'{ingredient1.id},{ingredient2.id}'}  # type: ignore
+        response = self.client.get(RECIPES_URL, params)
+
+        ser1 = RecipeSerializer(recipe1)
+        ser2 = RecipeSerializer(recipe2)
+        ser3 = RecipeSerializer(recipe3)
+
+        self.assertIn(ser1.data, response.data)  # type: ignore
+        self.assertIn(ser2.data, response.data)  # type: ignore
+        self.assertNotIn(ser3.data, response.data)  # type: ignore
+
     # image test recipe api.
 
 
